@@ -39,14 +39,14 @@ const billingLabels = {
 const moduleConfig = {
   preAdvice: {
     badge: "Pre-advice Module",
-    title: "Booking Approval and Yard Assignment",
+    title: "Pre-Advice Pending Approval",
     description:
-      "This is where the admin reviews client booking requests, checks available yard capacity, and assigns the container to an area, block, bay, row, and tier before approval.",
+      "Review pending pre-advice approvals, check available yard capacity, and assign the container to one yard area before approval.",
     icon: ClipboardList,
     defaultStatus: "pending_admin_approval",
     defaultBillingStatus: "all",
     primarySection: "approval",
-    queueTitle: "Pending Client Bookings",
+    queueTitle: "Pre-Advice Pending for Approval",
   },
   gateIn: {
     badge: "Gate-In Module",
@@ -116,6 +116,9 @@ const initialGateIn = {
 const AdminBookingModule = ({ mode }) => {
   const config = moduleConfig[mode] || moduleConfig.preAdvice
   const HeaderIcon = config.icon
+  const isPreAdviceApprovalMode = mode === "preAdvice"
+  const bookingBasePath = isPreAdviceApprovalMode ? "/admin/pre-advice-bookings" : "/admin/bookings"
+  const yardBasePath = isPreAdviceApprovalMode ? "/admin/pre-advice-bookings/yard" : "/admin/yard"
 
   const [bookings, setBookings] = useState([])
   const [areas, setAreas] = useState([])
@@ -133,8 +136,20 @@ const AdminBookingModule = ({ mode }) => {
   const [alert, setAlert] = useState({ type: "", message: "" })
 
   const selectedBooking = useMemo(() => bookings.find((booking) => booking.id === selectedId) || bookings[0] || null, [bookings, selectedId])
-  const selectedBlock = useMemo(() => blocks.find((block) => block.id === approval.blockId), [blocks, approval.blockId])
-  const usableBlocks = useMemo(() => blocks.filter((block) => !selectedBooking || Number(block.containerSize) === Number(selectedBooking.containerSize)), [blocks, selectedBooking])
+  const selectedBlock = useMemo(() => blocks.find((block) => String(block.id) === String(approval.blockId)), [blocks, approval.blockId])
+  const usableBlocks = useMemo(() => blocks.filter((block) => {
+    const isActive = !block.status || block.status === "active"
+
+    // In the Pre-advice Module, the admin selects a Yard Area only.
+    // The backend keeps an internal location record for slot tracking, but the UI does not expose Block anymore.
+    // Do not hide areas just because their setup size is different from the booking container size.
+    if (isPreAdviceApprovalMode) return isActive
+
+    const bookingSize = Number(selectedBooking?.containerSize)
+    const blockSize = Number(block.containerSize)
+    const matchesSize = !bookingSize || !blockSize || blockSize === bookingSize
+    return matchesSize && isActive
+  }), [blocks, selectedBooking, isPreAdviceApprovalMode])
   const unavailableSlotKeys = useMemo(() => new Set(slotAvailability.map((slot) => slot.key)), [slotAvailability])
   const selectedSlotKey = `${approval.bay || 1}-${approval.row || 1}-${approval.tier || 1}`
   const selectedSlotTaken = approval.blockId ? unavailableSlotKeys.has(selectedSlotKey) : false
@@ -149,7 +164,7 @@ const AdminBookingModule = ({ mode }) => {
       if (filters.status) params.set("status", filters.status)
       if (filters.billingStatus) params.set("billingStatus", filters.billingStatus)
       if (filters.search) params.set("search", filters.search)
-      const { data } = await api.get(`/admin/bookings?${params.toString()}`)
+      const { data } = await api.get(`${bookingBasePath}?${params.toString()}`)
       setBookings(data.bookings || [])
       if (data.bookings?.length) {
         setSelectedId((current) => current && data.bookings.some((booking) => booking.id === current) ? current : data.bookings[0].id)
@@ -165,9 +180,18 @@ const AdminBookingModule = ({ mode }) => {
 
   const loadAreas = async () => {
     try {
-      const { data } = await api.get("/admin/yard/areas")
+      if (isPreAdviceApprovalMode) {
+        const { data } = await api.get(`${yardBasePath}/blocks`)
+        setAreas(data.areas || [])
+        setBlocks(data.blocks || [])
+        return
+      }
+
+      const { data } = await api.get(`${yardBasePath}/areas`)
       setAreas(data.areas || [])
     } catch (error) {
+      setAreas([])
+      setBlocks([])
       setAlert({ type: "error", message: getApiError(error) })
     }
   }
@@ -179,7 +203,7 @@ const AdminBookingModule = ({ mode }) => {
     }
 
     try {
-      const { data } = await api.get(`/admin/yard/areas/${areaId}/blocks`)
+      const { data } = await api.get(`${yardBasePath}/areas/${areaId}/blocks`)
       setBlocks(data.blocks || [])
     } catch (error) {
       setAlert({ type: "error", message: getApiError(error) })
@@ -194,7 +218,7 @@ const AdminBookingModule = ({ mode }) => {
     }
 
     try {
-      const { data } = await api.get(`/admin/bookings/yard/blocks/${blockId}/slots`)
+      const { data } = await api.get(`${bookingBasePath}/yard/blocks/${blockId}/slots`)
       setSlotAvailability(data.slots || [])
     } catch (error) {
       setSlotAvailability([])
@@ -239,8 +263,8 @@ const AdminBookingModule = ({ mode }) => {
   }, [selectedBooking?.id])
 
   useEffect(() => {
-    if (config.primarySection === "approval") loadBlocks(approval.areaId)
-  }, [approval.areaId, config.primarySection])
+    if (config.primarySection === "approval" && !isPreAdviceApprovalMode) loadBlocks(approval.areaId)
+  }, [approval.areaId, config.primarySection, isPreAdviceApprovalMode])
 
   useEffect(() => {
     if (config.primarySection === "approval") loadSlotAvailability(approval.blockId)
@@ -273,14 +297,26 @@ const AdminBookingModule = ({ mode }) => {
     }
   }
 
+  const handleApprovalAreaChange = (areaLocationId) => {
+    const areaLocation = blocks.find((item) => String(item.id) === String(areaLocationId))
+    setApproval((current) => ({
+      ...current,
+      areaId: areaLocation?.area || areaLocationId || "",
+      blockId: areaLocation?.id || "",
+      bay: 1,
+      row: 1,
+      tier: 1,
+    }))
+  }
+
   const approveBooking = () => runAction(
-    () => api.patch(`/admin/bookings/${selectedBooking.id}/approve`, approval),
-    "Booking approved and yard area assigned."
+    () => api.patch(`${bookingBasePath}/${selectedBooking.id}/approve`, approval),
+    isPreAdviceApprovalMode ? "Pre-advice approved and yard location assigned." : "Booking approved and yard area assigned."
   )
 
   const rejectBooking = () => runAction(
-    () => api.patch(`/admin/bookings/${selectedBooking.id}/reject`, { reason: rejectReason }),
-    "Booking rejected."
+    () => api.patch(`${bookingBasePath}/${selectedBooking.id}/reject`, { reason: rejectReason }),
+    isPreAdviceApprovalMode ? "Pre-advice rejected." : "Booking rejected."
   )
 
   const approveGateIn = () => runAction(
@@ -368,6 +404,7 @@ const AdminBookingModule = ({ mode }) => {
                   <span className={`rounded-full px-3 py-1 text-[11px] font-black ${statusClass(booking.status)}`}>{statusLabels[booking.status] || booking.status}</span>
                 </div>
                 <div className="mt-3 text-xs font-bold text-slate-500">{booking.containerSize}ft • {booking.containerType?.replace("_", " ")} • {booking.shippingLine}</div>
+                <div className="mt-2 text-xs font-bold text-slate-500">Booking No.: {booking.bookingNumber || "Generated after approval"}</div>
                 <div className="mt-2 text-xs font-bold text-slate-500">Billing: {billingLabels[booking.billingStatus] || booking.billingStatus}</div>
               </button>
             ))}
@@ -397,6 +434,7 @@ const AdminBookingModule = ({ mode }) => {
               </div>
 
               <div className="mt-5 grid gap-3 rounded-3xl bg-slate-50 p-4 text-sm md:grid-cols-3">
+                <div><span className="font-black text-slate-500">Booking No.:</span> {selectedBooking.bookingNumber || "Generated after approval"}</div>
                 <div><span className="font-black text-slate-500">Size:</span> {selectedBooking.containerSize}ft</div>
                 <div><span className="font-black text-slate-500">Type:</span> {selectedBooking.containerType?.replace("_", " ")}</div>
                 <div><span className="font-black text-slate-500">Load:</span> {selectedBooking.containerLoadStatus}</div>
@@ -410,21 +448,53 @@ const AdminBookingModule = ({ mode }) => {
               <div className="card p-5">
                 <div className="flex items-center gap-2">
                   <MapPinned size={18} className="text-teal-700" />
-                  <h3 className="text-lg font-black text-slate-950">Approve Booking and Assign Yard Location</h3>
+                  <h3 className="text-lg font-black text-slate-950">{isPreAdviceApprovalMode ? "Approve Pre-Advice and Assign Yard Location" : "Approve Booking and Assign Yard Location"}</h3>
                 </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <Field label="Yard Block / Area">
-                    <select className="input" value={approval.areaId} onChange={(event) => setApproval((current) => ({ ...current, areaId: event.target.value, blockId: "", bay: 1, row: 1, tier: 1 }))}>
-                      <option value="">Select Alpha, Bravo, Echo, etc.</option>
-                      {areas.map((area) => <option key={area.id} value={area.id}>{area.name} • {area.availableSlots} TEU available</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Block Section" hint="Only active matching container-size block sections are shown.">
-                    <select className="input" value={approval.blockId} onChange={(event) => setApproval((current) => ({ ...current, blockId: event.target.value, bay: 1, row: 1, tier: 1 }))}>
-                      <option value="">Select block section</option>
-                      {usableBlocks.map((block) => <option key={block.id} value={block.id}>{block.code} • {block.availableSlots} TEU left • {block.containerSize}ft</option>)}
-                    </select>
-                  </Field>
+                  {isPreAdviceApprovalMode ? (
+                    <div className="md:col-span-2">
+                      <Field label="Yard Area" hint="Select the yard area where the container will be assigned.">
+                        <select className="input" value={approval.blockId} onChange={(event) => handleApprovalAreaChange(event.target.value)}>
+                          <option value="">Select yard area</option>
+                          {usableBlocks.map((area) => (
+                            <option key={area.id} value={area.id}>
+                              {area.areaName || area.name || "Yard Area"} • {area.areaCode || area.code || "AREA"} • {area.availableSlots ?? 0} TEU left
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      {areas.length === 0 && (
+                        <div className="mt-2 rounded-2xl bg-amber-50 p-3 text-xs font-bold text-amber-700">
+                          No yard area found. Add an active area in Yard Area Setup first.
+                        </div>
+                      )}
+                      {areas.length > 0 && blocks.length === 0 && (
+                        <div className="mt-2 rounded-2xl bg-amber-50 p-3 text-xs font-bold text-amber-700">
+                          Yard areas exist, but the approval area list was not loaded. Refresh this page after restarting the updated server.
+                        </div>
+                      )}
+                      {blocks.length > 0 && usableBlocks.length === 0 && (
+                        <div className="mt-2 rounded-2xl bg-amber-50 p-3 text-xs font-bold text-amber-700">
+                          No active yard area is available. Check the yard area status in Yard Area Setup.
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <Field label="Yard Block / Area">
+                        <select className="input" value={approval.areaId} onChange={(event) => setApproval((current) => ({ ...current, areaId: event.target.value, blockId: "", bay: 1, row: 1, tier: 1 }))}>
+                          <option value="">Select Alpha, Bravo, Echo, etc.</option>
+                          {areas.map((area) => <option key={area.id} value={area.id}>{area.name} • {area.availableSlots} TEU available</option>)}
+                        </select>
+                      </Field>
+                      <Field label="Block Section" hint="Only active matching container-size block sections are shown.">
+                        <select className="input" value={approval.blockId} onChange={(event) => setApproval((current) => ({ ...current, blockId: event.target.value, bay: 1, row: 1, tier: 1 }))}>
+                          <option value="">Select block section</option>
+                          {usableBlocks.map((block) => <option key={block.id} value={block.id}>{block.code} • {block.availableSlots} TEU left • {block.containerSize}ft</option>)}
+                        </select>
+                      </Field>
+                    </>
+                  )}
                   <Field label="Bay">
                     <select className="input" value={approval.bay} onChange={(event) => setApproval((current) => ({ ...current, bay: event.target.value }))} disabled={!selectedBlock}>
                       {bayOptions.map((value) => <option key={value} value={value}>Bay {value}</option>)}
@@ -444,7 +514,7 @@ const AdminBookingModule = ({ mode }) => {
                 {selectedBlock && (
                   <div className="mt-4 space-y-3">
                     <div className="rounded-2xl bg-teal-50 p-4 text-sm font-bold text-teal-800">
-                      {selectedBlock.name}: {selectedBlock.occupiedSlots}/{selectedBlock.capacityTeu} TEU used, {selectedBlock.availableSlots} TEU remaining. Selected slot: B{approval.bay}-R{approval.row}-T{approval.tier}.
+                      {isPreAdviceApprovalMode ? `${selectedBlock.areaName || selectedBlock.name || "Yard Area"}` : (selectedBlock.name || selectedBlock.code || "Selected block")}: {selectedBlock.occupiedSlots}/{selectedBlock.capacityTeu} TEU used, {selectedBlock.availableSlots} TEU remaining. Selected location: B{approval.bay}-R{approval.row}-T{approval.tier}.
                     </div>
                     {selectedSlotTaken ? (
                       <div className="rounded-2xl bg-red-50 p-4 text-sm font-bold text-red-700">
@@ -497,15 +567,11 @@ const AdminBookingModule = ({ mode }) => {
                   <Field label="Seal Number">
                     <input className="input" value={gateIn.sealNumber} onChange={(event) => setGateIn((current) => ({ ...current, sealNumber: event.target.value }))} />
                   </Field>
-                  <Field label="Truck Plate Number">
-                    <input className="input" value={gateIn.truckPlateNumber} onChange={(event) => setGateIn((current) => ({ ...current, truckPlateNumber: event.target.value }))} />
-                  </Field>
-                  <Field label="Driver Name">
-                    <input className="input" value={gateIn.driverName} onChange={(event) => setGateIn((current) => ({ ...current, driverName: event.target.value }))} />
-                  </Field>
-                  <Field label="Driver License">
-                    <input className="input" value={gateIn.driverLicenseNumber} onChange={(event) => setGateIn((current) => ({ ...current, driverLicenseNumber: event.target.value }))} />
-                  </Field>
+                </div>
+                <div className="mt-4 grid gap-3 rounded-3xl bg-slate-50 p-4 text-sm md:grid-cols-3">
+                  <div><span className="font-black text-slate-500">Truck Plate:</span> {selectedBooking.truckPlateNumber || "-"}</div>
+                  <div><span className="font-black text-slate-500">Driver:</span> {selectedBooking.driverName || "-"}</div>
+                  <div><span className="font-black text-slate-500">Driver License:</span> {selectedBooking.driverLicenseNumber || "-"}</div>
                 </div>
                 <Field label="Inspection Remarks">
                   <textarea className="input mt-4 min-h-[82px]" value={gateIn.inspectionRemarks} onChange={(event) => setGateIn((current) => ({ ...current, inspectionRemarks: event.target.value }))} />

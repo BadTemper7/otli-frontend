@@ -10,6 +10,7 @@ const modules = [
   "accounts",
   "clients",
   "preAdvice",
+  "bookings",
   "gateAppointment",
   "gateIn",
   "yardSetup",

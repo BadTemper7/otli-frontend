@@ -68,7 +68,7 @@ const Alert = ({ type = "info", children }) => {
         <button
           type="button"
           onClick={() => setVisible(false)}
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/70 text-current opacity-70 transition hover:opacity-100"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/[0.07]0 text-current opacity-70 transition hover:opacity-100"
           aria-label="Close notification"
         >
           <X size={16} />

@@ -25,11 +25,13 @@ import PlaceholderPage from "./pages/PlaceholderPage"
 import HomePage from "./pages/HomePage"
 import ClientBookings from "./pages/ClientBookings"
 import AdminBookings from "./pages/AdminBookings"
+import BookingLookupPage from "./pages/BookingLookupPage"
 
 const App = () => {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/booking-status" element={<BookingLookupPage />} />
 
       <Route path="/admin/login" element={<LoginPage type="admin" />} />
       <Route path="/admin/forgot-password" element={<ForgotPasswordPage type="admin" />} />

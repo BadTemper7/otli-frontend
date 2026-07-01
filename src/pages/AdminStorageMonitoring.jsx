@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Boxes, CalendarClock, Layers3, RefreshCw, Rotate3D, Search, Warehouse } from "lucide-react"
 import Alert from "../components/Alert"
 import { api, getApiError } from "../lib/api"
@@ -286,7 +286,7 @@ const SlotSummaryCard = ({ label, value, sublabel, icon: Icon }) => (
 
 const SlotLegend = () => (
   <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-600">
-    <span className="inline-flex items-center gap-2"><span className="h-4 w-4 border border-slate-400 bg-white/70" /> Empty</span>
+    <span className="inline-flex items-center gap-2"><span className="h-4 w-4 border border-slate-400 bg-white/[0.07]0" /> Empty</span>
     <span className="inline-flex items-center gap-2"><span className="h-4 w-4 border border-emerald-800 bg-emerald-700" /> Assigned</span>
     <span className="inline-flex items-center gap-2"><span className="h-4 w-4 border border-amber-400 bg-amber-50" /> Selected</span>
   </div>
@@ -299,52 +299,49 @@ const getContainerSlotKey = (container) => {
   return `${bay}-${row}-${tier}`
 }
 
-const makeCubePoints = ({ x, y, w, d, h }) => {
-  const topA = [x, y]
-  const topB = [x + w, y]
-  const topC = [x + w + d, y + d * 0.62]
-  const topD = [x + d, y + d * 0.62]
-  const botA = [topA[0], topA[1] + h]
-  const botB = [topB[0], topB[1] + h]
-  const botC = [topC[0], topC[1] + h]
-  const botD = [topD[0], topD[1] + h]
-
-  return { topA, topB, topC, topD, botA, botB, botC, botD }
-}
-
-const pointsToString = (points) => points.map(([x, y]) => `${x},${y}`).join(" ")
-
-const CubeSlot = ({ cube, assignedContainer, selected, onSelect }) => {
-  const p = makeCubePoints(cube)
+const Cube3D = ({ cube, assignedContainer, selected, onSelect }) => {
   const filled = Boolean(assignedContainer)
-  const stroke = selected ? "#f59e0b" : filled ? "#047857" : "#94a3b8"
-  const strokeWidth = selected ? 2.6 : filled ? 1.8 : 0.9
-  const topFill = filled ? "#10b981" : "rgba(255,255,255,0.35)"
-  const frontFill = filled ? "#059669" : "rgba(255,255,255,0.18)"
-  const sideFill = filled ? "#047857" : "rgba(248,250,252,0.10)"
-  const cursor = filled ? "pointer" : "default"
+  const className = [
+    "yard-cube",
+    filled ? "yard-cube-assigned" : "yard-cube-empty",
+    selected ? "yard-cube-selected" : "",
+  ].filter(Boolean).join(" ")
 
   return (
-    <g onClick={filled ? onSelect : undefined} style={{ cursor }}>
-      <polygon points={pointsToString([p.topA, p.topB, p.botB, p.botA])} fill={frontFill} stroke={stroke} strokeWidth={strokeWidth} />
-      <polygon points={pointsToString([p.topB, p.topC, p.botC, p.botB])} fill={sideFill} stroke={stroke} strokeWidth={strokeWidth} />
-      <polygon points={pointsToString([p.topA, p.topB, p.topC, p.topD])} fill={topFill} stroke={stroke} strokeWidth={strokeWidth} />
-      <polyline points={pointsToString([p.topD, p.botD, p.botC])} fill="none" stroke={stroke} strokeWidth={strokeWidth} opacity={filled ? 0.85 : 0.55} />
-      {filled && (
-        <>
-          <rect x={cube.x + cube.w * 0.18} y={cube.y + cube.h * 0.35} width={cube.w * 0.48} height={cube.h * 0.11} rx="2" fill="rgba(255,255,255,0.45)" />
-          <text x={cube.x + cube.w * 0.5} y={cube.y + cube.h * 0.75} textAnchor="middle" className="fill-white text-[8px] font-black">
-            {String(assignedContainer.containerNumber || "CNTR").slice(0, 6)}
-          </text>
-        </>
-      )}
-    </g>
+    <button
+      type="button"
+      className={className}
+      onClick={filled ? onSelect : undefined}
+      aria-label={filled ? `${assignedContainer.containerNumber} at Bay ${cube.bay}, Row ${cube.row}, High ${cube.tier}` : `Empty slot Bay ${cube.bay}, Row ${cube.row}, High ${cube.tier}`}
+      style={{
+        width: cube.width,
+        height: cube.height,
+        transform: `translate3d(${cube.x}px, ${cube.y}px, ${cube.z}px)`,
+        cursor: filled ? "pointer" : "default",
+      }}
+    >
+      <span className="yard-cube-face yard-cube-front" />
+      <span className="yard-cube-face yard-cube-back" />
+      <span className="yard-cube-face yard-cube-right" />
+      <span className="yard-cube-face yard-cube-left" />
+      <span className="yard-cube-face yard-cube-top" />
+      <span className="yard-cube-face yard-cube-bottom" />
+      {filled && <span className="yard-cube-label">{String(assignedContainer.containerNumber || "CNTR").slice(0, 7)}</span>}
+    </button>
   )
 }
+
+const AxisLabel = ({ children, style, className = "" }) => (
+  <span className={`yard-axis-label ${className}`} style={style}>{children}</span>
+)
 
 const BlockSlotMap = ({ selectedArea, block, containers }) => {
   const { bayCount: lineCount, rowCount, tierCount } = getSlotCounts(block, selectedArea)
   const [selectedContainerId, setSelectedContainerId] = useState("")
+  const [rotation, setRotation] = useState(-38)
+  const [tilt, setTilt] = useState(58)
+  const [zoom, setZoom] = useState(1)
+  const dragRef = useRef(null)
 
   const containersBySlot = useMemo(() => {
     return containers.reduce((acc, container) => {
@@ -367,13 +364,14 @@ const BlockSlotMap = ({ selectedArea, block, containers }) => {
   const selectedContainer = containers.find((container) => container.id === selectedContainerId) || containers[0] || null
   const selectedSlotKey = selectedContainer ? getContainerSlotKey(selectedContainer) : ""
 
-  const cubeW = 55
-  const cubeD = 38
-  const cubeH = 34
-  const originX = 98
-  const originY = 285
-  const svgWidth = Math.max(940, originX + rowCount * cubeW + lineCount * cubeD + 140)
-  const svgHeight = Math.max(520, originY + lineCount * cubeD * 0.62 + cubeH + 110)
+  const cubeW = 58
+  const cubeH = 42
+  const cubeD = 52
+  const gap = 1.5
+  const sceneWidth = rowCount * (cubeW + gap)
+  const sceneDepth = lineCount * (cubeD + gap)
+  const sceneHeight = tierCount * (cubeH + gap)
+  const viewportHeight = clamp(420 + tierCount * 24 + lineCount * 12, 540, 760)
 
   const cubes = []
   for (let tier = 1; tier <= tierCount; tier += 1) {
@@ -384,53 +382,175 @@ const BlockSlotMap = ({ selectedArea, block, containers }) => {
           key,
           line,
           row,
+          bay: line,
           tier,
-          x: originX + (row - 1) * cubeW + (line - 1) * cubeD,
-          y: originY + (line - 1) * cubeD * 0.62 - (tier - 1) * cubeH,
-          w: cubeW,
-          d: cubeD,
-          h: cubeH,
+          x: (row - 1) * (cubeW + gap),
+          y: -(tier - 1) * (cubeH + gap),
+          z: (line - 1) * (cubeD + gap),
+          width: cubeW,
+          height: cubeH,
+          depth: cubeD,
           assignedContainer: containersBySlot[key],
         })
       }
     }
   }
 
+  const handlePointerDown = (event) => {
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      startRotation: rotation,
+      startTilt: tilt,
+    }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const handlePointerMove = (event) => {
+    if (!dragRef.current) return
+
+    const deltaX = event.clientX - dragRef.current.startX
+    const deltaY = event.clientY - dragRef.current.startY
+
+    setRotation(dragRef.current.startRotation + deltaX * 0.25)
+    setTilt(clamp(dragRef.current.startTilt - deltaY * 0.18, 28, 78))
+  }
+
+  const handlePointerEnd = () => {
+    dragRef.current = null
+  }
+
+  const resetView = () => {
+    setRotation(-38)
+    setTilt(58)
+    setZoom(1)
+  }
+
+  const selectedCoordinateLabel = selectedContainer
+    ? `${selectedArea?.name || "Area"} - Line ${numberValue(selectedContainer.bay, 1)}, Row ${numberValue(selectedContainer.row, 1)}, High ${numberValue(selectedContainer.tier, 1)}`
+    : "No assigned container selected"
+
   return (
     <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-200 p-5 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-4 border-b border-slate-200 p-5 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <h3 className="text-lg font-black uppercase tracking-wide text-slate-950">{block.code || block.name} Block - 3D Slot Map</h3>
           <p className="mt-1 text-sm font-semibold text-slate-500">
             Rows: {rowCount} • Lines: {lineCount} • High: {tierCount}
           </p>
+          <p className="mt-1 text-xs font-bold text-slate-400">This is a true CSS 3D stack. Drag left/right to rotate the whole block. Drag up/down to change the camera angle.</p>
         </div>
-        <SlotLegend />
+        <div className="flex flex-col gap-3 xl:items-end">
+          <SlotLegend />
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50" onClick={() => setRotation((value) => value - 18)}>
+              Rotate Left
+            </button>
+            <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50" onClick={() => setRotation((value) => value + 18)}>
+              Rotate Right
+            </button>
+            <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50" onClick={() => setTilt((value) => clamp(value + 6, 28, 78))}>
+              Tilt Up
+            </button>
+            <button type="button" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50" onClick={() => setTilt((value) => clamp(value - 6, 28, 78))}>
+              Tilt Down
+            </button>
+            <button type="button" className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white shadow-sm hover:bg-slate-800" onClick={resetView}>
+              Reset View
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="overflow-auto bg-white p-5">
-        <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="min-h-[520px] w-full min-w-[900px]">
-          <defs>
-            <filter id="slotShadow" x="-20%" y="-20%" width="140%" height="160%">
-              <feDropShadow dx="0" dy="10" stdDeviation="8" floodColor="#0f172a" floodOpacity="0.12" />
-            </filter>
-          </defs>
+      <div className="bg-white p-5">
+        <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-3">
+          <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Rotate: {Math.round(rotation)}°
+            <input className="mt-2 w-full accent-emerald-700" type="range" min="-180" max="180" value={rotation} onChange={(event) => setRotation(Number(event.target.value))} />
+          </label>
+          <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Tilt: {Math.round(tilt)}°
+            <input className="mt-2 w-full accent-emerald-700" type="range" min="28" max="78" value={tilt} onChange={(event) => setTilt(Number(event.target.value))} />
+          </label>
+          <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Zoom: {Math.round(zoom * 100)}%
+            <input className="mt-2 w-full accent-emerald-700" type="range" min="0.65" max="1.35" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+          </label>
+        </div>
 
-          <text x="30" y="115" className="fill-slate-950 text-xs font-black">HIGH</text>
-          <line x1="48" y1="132" x2="48" y2={originY + cubeH + 8} stroke="#0f172a" strokeWidth="1.2" />
-          <path d="M48 132 L42 140 M48 132 L54 140" stroke="#0f172a" fill="none" />
-          <path d={`M48 ${originY + cubeH + 8} L42 ${originY + cubeH} M48 ${originY + cubeH + 8} L54 ${originY + cubeH}`} stroke="#0f172a" fill="none" />
-          {Array.from({ length: tierCount }, (_, index) => {
-            const tier = index + 1
-            const y = originY + cubeH - (tier - 1) * cubeH - cubeH / 2
-            return <text key={`tier-label-${tier}`} x="70" y={y + 4} className="fill-slate-700 text-xs font-bold">{tier}</text>
-          })}
+        <div
+          className="yard-3d-viewport"
+          style={{ height: viewportHeight }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+        >
+          <div className="yard-3d-helper yard-3d-helper-high">HIGH</div>
+          <div className="yard-3d-helper yard-3d-helper-row">ROW (HORIZONTAL)</div>
+          <div className="yard-3d-helper yard-3d-helper-line">LINE (DEPTH)</div>
 
-          <g filter="url(#slotShadow)">
+          <div
+            className="yard-3d-scene"
+            style={{
+              width: sceneWidth,
+              height: sceneHeight,
+              transform: `translate(-50%, -50%) scale(${zoom}) rotateX(${tilt}deg) rotateZ(${rotation}deg)`,
+            }}
+          >
+            <div
+              className="yard-floor-plane"
+              style={{
+                width: sceneWidth,
+                height: sceneDepth,
+                transform: `rotateX(90deg) translateZ(${cubeH * 0.5}px)`,
+                backgroundSize: `${cubeW + gap}px ${cubeD + gap}px`,
+              }}
+            />
+
+            {Array.from({ length: rowCount }, (_, index) => {
+              const row = index + 1
+              return (
+                <AxisLabel
+                  key={`row-label-${row}`}
+                  className="yard-axis-row"
+                  style={{ transform: `translate3d(${(row - 0.5) * (cubeW + gap) - 4}px, ${cubeH + 18}px, -34px) rotateZ(${-rotation}deg) rotateX(${-tilt}deg)` }}
+                >
+                  {row}
+                </AxisLabel>
+              )
+            })}
+
+            {Array.from({ length: lineCount }, (_, index) => {
+              const line = index + 1
+              return (
+                <AxisLabel
+                  key={`line-label-${line}`}
+                  className="yard-axis-line"
+                  style={{ transform: `translate3d(${sceneWidth + 18}px, ${cubeH + 4}px, ${(line - 0.5) * (cubeD + gap)}px) rotateZ(${-rotation}deg) rotateX(${-tilt}deg)` }}
+                >
+                  {line}
+                </AxisLabel>
+              )
+            })}
+
+            {Array.from({ length: tierCount }, (_, index) => {
+              const tier = index + 1
+              return (
+                <AxisLabel
+                  key={`tier-label-${tier}`}
+                  className="yard-axis-tier"
+                  style={{ transform: `translate3d(-38px, ${-(tier - 1) * (cubeH + gap) + 8}px, -24px) rotateZ(${-rotation}deg) rotateX(${-tilt}deg)` }}
+                >
+                  {tier}
+                </AxisLabel>
+              )
+            })}
+
             {cubes.map((cube) => {
               const selected = cube.key === selectedSlotKey
               return (
-                <CubeSlot
+                <Cube3D
                   key={cube.key}
                   cube={cube}
                   assignedContainer={cube.assignedContainer}
@@ -439,27 +559,8 @@ const BlockSlotMap = ({ selectedArea, block, containers }) => {
                 />
               )
             })}
-          </g>
-
-          {Array.from({ length: rowCount }, (_, index) => {
-            const row = index + 1
-            const x = originX + (row - 1) * cubeW + cubeW / 2
-            const y = originY + lineCount * cubeD * 0.62 + cubeH + 26
-            return <text key={`row-axis-${row}`} x={x} y={y} textAnchor="middle" className="fill-slate-700 text-xs font-bold">{row}</text>
-          })}
-          <line x1={originX} y1={originY + lineCount * cubeD * 0.62 + cubeH + 44} x2={originX + rowCount * cubeW} y2={originY + lineCount * cubeD * 0.62 + cubeH + 44} stroke="#0f172a" strokeWidth="1" />
-          <path d={`M${originX + rowCount * cubeW} ${originY + lineCount * cubeD * 0.62 + cubeH + 44} L${originX + rowCount * cubeW - 10} ${originY + lineCount * cubeD * 0.62 + cubeH + 38} M${originX + rowCount * cubeW} ${originY + lineCount * cubeD * 0.62 + cubeH + 44} L${originX + rowCount * cubeW - 10} ${originY + lineCount * cubeD * 0.62 + cubeH + 50}`} stroke="#0f172a" fill="none" />
-          <text x={originX + rowCount * cubeW / 2} y={originY + lineCount * cubeD * 0.62 + cubeH + 75} textAnchor="middle" className="fill-slate-950 text-xs font-black">ROW (HORIZONTAL)</text>
-
-          {Array.from({ length: lineCount }, (_, index) => {
-            const line = index + 1
-            const x = originX + rowCount * cubeW + (line - 1) * cubeD + cubeD + 26
-            const y = originY + (line - 1) * cubeD * 0.62 + cubeH + 14
-            return <text key={`line-axis-${line}`} x={x} y={y} textAnchor="middle" className="fill-slate-700 text-xs font-bold">{line}</text>
-          })}
-          <line x1={originX + rowCount * cubeW + 16} y1={originY + cubeH + 22} x2={originX + rowCount * cubeW + lineCount * cubeD + 28} y2={originY + lineCount * cubeD * 0.62 + cubeH + 22} stroke="#0f172a" strokeWidth="1" />
-          <text x={originX + rowCount * cubeW + lineCount * cubeD + 70} y={originY + lineCount * cubeD * 0.62 + cubeH + 45} className="fill-slate-950 text-xs font-black">LINE (DEPTH)</text>
-        </svg>
+          </div>
+        </div>
       </div>
 
       <div className="border-t border-slate-200 p-5">
@@ -469,9 +570,7 @@ const BlockSlotMap = ({ selectedArea, block, containers }) => {
               <div className="grid h-12 w-12 place-items-center rounded-full bg-emerald-700 text-white"><Warehouse size={21} /></div>
               <div>
                 <div className="text-xs font-black uppercase tracking-wide text-slate-500">Selected Coordinate</div>
-                <div className="text-base font-black text-slate-950">
-                  {selectedArea?.name} - Line {numberValue(selectedContainer.bay, 1)}, Row {numberValue(selectedContainer.row, 1)}, High {numberValue(selectedContainer.tier, 1)}
-                </div>
+                <div className="text-base font-black text-slate-950">{selectedCoordinateLabel}</div>
               </div>
             </div>
             <div>

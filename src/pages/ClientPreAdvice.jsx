@@ -9,7 +9,6 @@ const initialForm = {
   containerType: "dry",
   containerStatus: "empty",
   shippingLine: "",
-  bookingNumber: "",
   blNumber: "",
   vesselVoyage: "",
   cargoDescription: "",
@@ -166,10 +165,6 @@ const ClientPreAdvice = () => {
               <input className="input" name="arrivalDate" type="date" value={form.arrivalDate} onChange={handleChange} required />
             </Field>
 
-            <Field label="Booking Number">
-              <input className="input" name="bookingNumber" value={form.bookingNumber} onChange={handleChange} placeholder="Optional" />
-            </Field>
-
             <Field label="BL Number">
               <input className="input" name="blNumber" value={form.blNumber} onChange={handleChange} placeholder="Optional" />
             </Field>
@@ -237,6 +232,7 @@ const ClientPreAdvice = () => {
                 <div className="mt-3 grid gap-2 text-sm font-semibold text-slate-600">
                   <div>{item.containerSize} FT / {item.containerType} / {item.containerStatus}</div>
                   <div>{item.shippingLine}</div>
+                  <div>Booking No.: {item.bookingNumber || "Generated after approval"}</div>
                   {item.rejectionReason && <div className="rounded-xl bg-red-50 p-3 text-red-700">Reason: {item.rejectionReason}</div>}
                   <div className="flex items-center gap-2 text-xs text-slate-400">
                     <FileText size={14} /> {item.documents?.length || 0} documents uploaded

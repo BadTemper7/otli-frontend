@@ -87,7 +87,7 @@ const LocationModal = ({ open, container, areas, blocks, slots, loadingBlocks, s
   }
 
   return (
-    <div className="fixed inset-0 z-[9998] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9998] grid place-items-center bg-slate-950/[0.55] p-4 backdrop-blur-sm">
       <div className="w-full max-w-3xl overflow-hidden rounded-[1.5rem] bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
           <div>

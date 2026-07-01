@@ -9,7 +9,9 @@ const initialBookingForm = {
   containerType: "dry",
   containerLoadStatus: "empty",
   shippingLine: "",
-  bookingNumber: "",
+  truckPlateNumber: "",
+  driverName: "",
+  driverLicenseNumber: "",
   blNumber: "",
   vesselVoyage: "",
   cargoDescription: "",
@@ -172,7 +174,9 @@ const ClientBookings = ({ showCreateForm = true }) => {
       containerType: booking.containerType || "dry",
       containerLoadStatus: booking.containerLoadStatus || "empty",
       shippingLine: booking.shippingLine || "",
-      bookingNumber: booking.bookingNumber || "",
+      truckPlateNumber: booking.truckPlateNumber || "",
+      driverName: booking.driverName || "",
+      driverLicenseNumber: booking.driverLicenseNumber || "",
       blNumber: booking.blNumber || "",
       vesselVoyage: booking.vesselVoyage || "",
       cargoDescription: booking.cargoDescription || "",
@@ -213,7 +217,7 @@ const ClientBookings = ({ showCreateForm = true }) => {
         <h1 className="mt-3 text-3xl font-black text-slate-950">{showCreateForm ? "Container Yard Booking" : "Container Status, Payment, and Gate-Out"}</h1>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
           {showCreateForm
-            ? "Submit a booking request. Admin will check yard capacity, assign an area and block, then update the booking through Gate-In, storage, billing, Gate-Out, and completion."
+            ? "Submit a booking request with container, truck, and driver details. Admin will check yard capacity, assign an area, then update the booking through Gate-In, storage, billing, Gate-Out, and completion."
             : "Track your containers. Add Payment is shown only once the container is stored in inventory. Gate-Out Request becomes available only after payment is Paid / Approved."}
         </p>
       </div>
@@ -263,14 +267,25 @@ const ClientBookings = ({ showCreateForm = true }) => {
             <Field label="Shipping Line">
               <input className="input" name="shippingLine" value={form.shippingLine} onChange={handleChange} required />
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Booking Number">
-                <input className="input" name="bookingNumber" value={form.bookingNumber} onChange={handleChange} />
-              </Field>
-              <Field label="BL Number">
-                <input className="input" name="blNumber" value={form.blNumber} onChange={handleChange} />
-              </Field>
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-xs font-black uppercase tracking-wide text-slate-500">Driver and Truck Details</div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Field label="Truck Plate Number">
+                  <input className="input uppercase" name="truckPlateNumber" value={form.truckPlateNumber} onChange={handleChange} placeholder="ABC 1234" required />
+                </Field>
+                <Field label="Driver Name">
+                  <input className="input" name="driverName" value={form.driverName} onChange={handleChange} placeholder="Driver full name" required />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Driver License Number">
+                    <input className="input" name="driverLicenseNumber" value={form.driverLicenseNumber} onChange={handleChange} placeholder="Optional" />
+                  </Field>
+                </div>
+              </div>
             </div>
+            <Field label="BL Number">
+              <input className="input" name="blNumber" value={form.blNumber} onChange={handleChange} />
+            </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Vessel / Voyage">
                 <input className="input" name="vesselVoyage" value={form.vesselVoyage} onChange={handleChange} />
@@ -321,13 +336,23 @@ const ClientBookings = ({ showCreateForm = true }) => {
                     </div>
 
                     <div className="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm md:grid-cols-3">
+                      <div><span className="font-black text-slate-500">Booking No.:</span> {booking.bookingNumber || "Generated after approval"}</div>
                       <div><span className="font-black text-slate-500">Area:</span> {booking.assignedAreaName || "Pending"}</div>
-                      <div><span className="font-black text-slate-500">Block:</span> {booking.assignedBlockCode || booking.assignedBlockName || "Pending"}</div>
                       <div><span className="font-black text-slate-500">Slot:</span> {booking.assignedSlotNumber || "Pending"}</div>
+                      <div><span className="font-black text-slate-500">Truck Plate:</span> {booking.truckPlateNumber || "-"}</div>
+                      <div><span className="font-black text-slate-500">Driver:</span> {booking.driverName || "-"}</div>
+                      <div><span className="font-black text-slate-500">Driver License:</span> {booking.driverLicenseNumber || "-"}</div>
                       <div><span className="font-black text-slate-500">Expected Arrival:</span> {formatDate(booking.expectedArrivalDate)}</div>
                       <div><span className="font-black text-slate-500">Gate-In:</span> {formatDate(booking.gateInApprovedAt)}</div>
                       <div><span className="font-black text-slate-500">Stored:</span> {formatDate(booking.storedAt)}</div>
                     </div>
+
+                    {booking.qrCodeValue && (
+                      <div className="mt-4 rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm">
+                        <div className="text-xs font-black uppercase tracking-wide text-teal-700">Booking QR Value</div>
+                        <div className="mt-1 break-all font-black text-slate-900">{booking.qrCodeValue}</div>
+                      </div>
+                    )}
 
                     {booking.rejectionReason && <Alert type="error">Rejected: {booking.rejectionReason}</Alert>}
                     {booking.paymentRejectionReason && <div className="mt-3"><Alert type="error">Payment rejected: {booking.paymentRejectionReason}</Alert></div>}

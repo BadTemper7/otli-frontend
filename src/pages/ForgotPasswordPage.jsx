@@ -1,12 +1,14 @@
-import { useState } from "react"
-import { Link } from "react-router-dom"
-import { KeyRound, Mail } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { CheckCircle2, KeyRound, Mail } from "lucide-react"
 import AuthShell from "../components/AuthShell"
 import Alert from "../components/Alert"
 import OtpInput from "../components/OtpInput"
 import { api, getApiError } from "../lib/api"
 
 const ForgotPasswordPage = ({ type = "admin" }) => {
+  const navigate = useNavigate()
+  const redirectTimer = useRef(null)
   const [step, setStep] = useState("email")
   const [email, setEmail] = useState("")
   const [otp, setOtp] = useState("")
@@ -15,8 +17,16 @@ const ForgotPasswordPage = ({ type = "admin" }) => {
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [passwordChanged, setPasswordChanged] = useState(false)
 
   const isAdmin = type === "admin"
+  const loginPath = isAdmin ? "/admin/login" : "/client/login"
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimer.current) clearTimeout(redirectTimer.current)
+    }
+  }, [])
 
   const requestOtp = async (event) => {
     event.preventDefault()
@@ -42,16 +52,22 @@ const ForgotPasswordPage = ({ type = "admin" }) => {
     setMessage("")
 
     try {
-      const { data } = await api.post("/auth/reset-password", {
+      await api.post("/auth/reset-password", {
         email,
         otp,
         password,
         confirmPassword,
       })
-      setMessage(data.message)
+
+      setPasswordChanged(true)
+      setMessage("Password has been changed. Redirecting to login in 3 seconds.")
       setOtp("")
       setPassword("")
       setConfirmPassword("")
+
+      redirectTimer.current = setTimeout(() => {
+        navigate(loginPath, { replace: true })
+      }, 3000)
     } catch (err) {
       setError(getApiError(err))
     } finally {
@@ -65,6 +81,15 @@ const ForgotPasswordPage = ({ type = "admin" }) => {
       title="Reset your password"
       subtitle="Enter your email, then use the OTP sent to your inbox to create a new password."
     >
+      {passwordChanged && (
+        <div className="fixed right-4 top-4 z-50 flex max-w-sm items-center gap-3 rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-bold text-emerald-800 shadow-xl">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+            <CheckCircle2 size={18} />
+          </span>
+          Password has been changed. Redirecting to login in 3 seconds.
+        </div>
+      )}
+
       <div className="card space-y-4 p-5">
         <Alert type="success">{message}</Alert>
         <Alert type="error">{error}</Alert>
@@ -80,6 +105,12 @@ const ForgotPasswordPage = ({ type = "admin" }) => {
               {loading ? "Sending OTP..." : "Send OTP"}
             </button>
           </form>
+        ) : passwordChanged ? (
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-center">
+            <CheckCircle2 className="mx-auto text-emerald-700" size={34} />
+            <div className="mt-3 text-lg font-black text-emerald-900">Password changed</div>
+            <p className="mt-2 text-sm font-semibold leading-6 text-emerald-800">Please wait. You will be redirected to the login page automatically.</p>
+          </div>
         ) : (
           <form onSubmit={resetPassword} className="space-y-4">
             <div>
@@ -101,9 +132,6 @@ const ForgotPasswordPage = ({ type = "admin" }) => {
           </form>
         )}
 
-        <Link className="block text-center text-sm font-bold text-teal-700 hover:text-teal-900" to={isAdmin ? "/admin/login" : "/client/login"}>
-          Back to login
-        </Link>
       </div>
     </AuthShell>
   )

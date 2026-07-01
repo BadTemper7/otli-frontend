@@ -371,15 +371,11 @@ const AdminBookings = () => {
                   <Field label="Seal Number">
                     <input className="input" value={gateIn.sealNumber} onChange={(event) => setGateIn((current) => ({ ...current, sealNumber: event.target.value }))} />
                   </Field>
-                  <Field label="Truck Plate Number">
-                    <input className="input" value={gateIn.truckPlateNumber} onChange={(event) => setGateIn((current) => ({ ...current, truckPlateNumber: event.target.value }))} />
-                  </Field>
-                  <Field label="Driver Name">
-                    <input className="input" value={gateIn.driverName} onChange={(event) => setGateIn((current) => ({ ...current, driverName: event.target.value }))} />
-                  </Field>
-                  <Field label="Driver License">
-                    <input className="input" value={gateIn.driverLicenseNumber} onChange={(event) => setGateIn((current) => ({ ...current, driverLicenseNumber: event.target.value }))} />
-                  </Field>
+                </div>
+                <div className="mt-4 grid gap-3 rounded-3xl bg-slate-50 p-4 text-sm md:grid-cols-3">
+                  <div><span className="font-black text-slate-500">Truck Plate:</span> {selectedBooking.truckPlateNumber || "-"}</div>
+                  <div><span className="font-black text-slate-500">Driver:</span> {selectedBooking.driverName || "-"}</div>
+                  <div><span className="font-black text-slate-500">Driver License:</span> {selectedBooking.driverLicenseNumber || "-"}</div>
                 </div>
                 <Field label="Inspection Remarks">
                   <textarea className="input mt-4 min-h-[82px]" value={gateIn.inspectionRemarks} onChange={(event) => setGateIn((current) => ({ ...current, inspectionRemarks: event.target.value }))} />
