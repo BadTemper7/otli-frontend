@@ -36,6 +36,9 @@ const formatDate = (value) => {
   return new Date(value).toLocaleString()
 }
 
+const getBookingInDate = (booking = {}) => booking.inDate || booking.expectedArrivalDate
+const getBookingOutDate = (booking = {}) => booking.outDate
+
 const Detail = ({ label, value }) => (
   <div className="rounded-2xl bg-slate-50 p-4">
     <div className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</div>
@@ -150,8 +153,10 @@ const BookingLookupPage = () => {
                   <Detail label="Container Size" value={`${booking.containerSize}ft`} />
                   <Detail label="Container Type" value={booking.containerType?.replace("_", " ")} />
                   <Detail label="Load Status" value={booking.containerLoadStatus} />
+                  <Detail label="Service Type" value={booking.serviceType === "stripping_stuffing_mano" ? "Stripping / Stuffing with Mano" : "Container Yard Operation"} />
                   <Detail label="Shipping Line" value={booking.shippingLine} />
-                  <Detail label="Expected Arrival" value={formatDate(booking.expectedArrivalDate)} />
+                  <Detail label="In Date" value={formatDate(getBookingInDate(booking))} />
+                  <Detail label="Requested Date Out" value={formatDate(getBookingOutDate(booking))} />
                   <Detail label="Truck Plate" value={booking.truckPlateNumber} />
                   <Detail label="Actual Container" value={booking.actualContainerNumber || booking.containerNumber} />
                 </div>
@@ -187,7 +192,7 @@ const BookingLookupPage = () => {
                   <Detail label="Gate-In" value={formatDate(booking.gateInApprovedAt)} />
                   <Detail label="Stored" value={formatDate(booking.storedAt)} />
                   <Detail label="Payment Submitted" value={formatDate(booking.paymentSubmittedAt)} />
-                  <Detail label="Payment Amount" value={booking.paymentAmount ? `PHP ${Number(booking.paymentAmount).toLocaleString()}` : "-"} />
+                  <Detail label="Total Bill Before Payment" value={(booking.billingTotal || booking.paymentAmount) ? `PHP ${Number(booking.billingTotal || booking.paymentAmount).toLocaleString()}` : "-"} />
                   <Detail label="Gate-Out Requested" value={formatDate(booking.gateOutRequestedAt)} />
                   <Detail label="Released" value={formatDate(booking.releasedAt)} />
                 </div>

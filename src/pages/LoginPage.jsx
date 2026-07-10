@@ -31,7 +31,7 @@ const LoginPage = ({ type = "admin" }) => {
       }
 
       const isVerifiedClient = ["active", "verified"].includes(nextUser?.status)
-      navigate(isVerifiedClient ? "/client/dashboard" : "/client/account-status")
+      navigate(isVerifiedClient ? "/dashboard" : "/profile")
     } catch (err) {
       setError(getApiError(err))
     } finally {
@@ -59,6 +59,7 @@ const LoginPage = ({ type = "admin" }) => {
             <input
               className="input !pl-11"
               type="email"
+              name="email"
               value={form.email}
               onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
               placeholder="name@example.com"
@@ -71,7 +72,7 @@ const LoginPage = ({ type = "admin" }) => {
         <div>
           <div className="mb-2 flex items-center justify-between gap-3">
             <label className="block text-sm font-black text-slate-700">Password</label>
-            <Link className="text-xs font-black text-teal-700 hover:text-teal-900" to={isAdmin ? "/admin/forgot-password" : "/client/forgot-password"}>
+            <Link className="text-xs font-black text-teal-700 hover:text-teal-900" to={isAdmin ? "/admin/forgot-password" : "/forgot-password"}>
               Forgot password?
             </Link>
           </div>
@@ -80,6 +81,7 @@ const LoginPage = ({ type = "admin" }) => {
             <input
               className="input !px-11"
               type={showPassword ? "text" : "password"}
+              name="password"
               value={form.password}
               onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
               placeholder="Enter your password"
@@ -105,7 +107,7 @@ const LoginPage = ({ type = "admin" }) => {
         {!isAdmin && (
           <div className="rounded-2xl bg-slate-50 p-4 text-center text-sm font-semibold text-slate-600">
             No company account yet?{" "}
-            <Link className="font-black text-teal-700 hover:text-teal-900" to="/client/register">
+            <Link className="font-black text-teal-700 hover:text-teal-900" to="/register">
               Register client
             </Link>
           </div>

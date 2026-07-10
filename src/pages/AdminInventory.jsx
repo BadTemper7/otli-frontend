@@ -49,7 +49,7 @@ const formatDate = (value) => {
 
 const getTeu = (size) => {
   if (Number(size) === 40) return 2
-  if (Number(size) === 45) return 2.25
+  if (Number(size) === 45) return 3
   return 1
 }
 
@@ -354,7 +354,7 @@ const AdminInventory = () => {
     try {
       setAlert({ type: "", message: "" })
       await api.patch(`/admin/bookings/${container.id}/store`)
-      setAlert({ type: "success", message: "Container marked as stored. It is now visible in Storage Monitoring." })
+      setAlert({ type: "success", message: "Container marked as stored. Billing was computed and it is now visible in Storage Monitoring." })
       await loadAll()
     } catch (error) {
       setAlert({ type: "error", message: getApiError(error) })
@@ -371,7 +371,7 @@ const AdminInventory = () => {
             </div>
             <h1 className="mt-3 text-3xl font-black text-slate-950">Assigned Container Inventory</h1>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-              This module lists bookings with approved yard locations. After Gate-In, admin confirms the container is physically placed by clicking Mark Stored in Area. Location changes are handled only through the relocate modal.
+              This module lists bookings with approved yard locations. After Gate-In, admin confirms the container is physically placed by clicking Mark Stored and Compute Bill. Location changes are handled only through the relocate modal.
             </p>
           </div>
           <button type="button" onClick={loadAll} className="btn-secondary" disabled={loading}>
@@ -464,7 +464,7 @@ const AdminInventory = () => {
                       <div className="flex flex-col items-stretch gap-2 sm:items-end">
                         {canMarkStored && (
                           <button type="button" onClick={() => handleMarkStored(container)} className="btn-primary whitespace-nowrap">
-                            <PackageCheck size={16} /> Mark Stored in Area
+                            <PackageCheck size={16} /> Mark Stored and Compute Bill
                           </button>
                         )}
                         {canRelocate && (

@@ -31,12 +31,12 @@ const ClientDashboard = () => {
               </p>
             </div>
             {verified ? (
-              <Link className="btn-primary w-full sm:w-auto" to="/client/containers">
+              <Link className="btn-primary w-full sm:w-auto" to="/containers">
                 <PackageCheck size={17} /> View My Containers <ArrowRight size={17} />
               </Link>
             ) : (
-              <Link className="btn-secondary w-full !border-white/[0.15] !bg-white/10 !text-white hover:!bg-white/[0.15] sm:w-auto" to="/client/account-status">
-                <ShieldCheck size={17} /> View Account Status
+              <Link className="btn-secondary w-full !border-white/[0.15] !bg-white/10 !text-white hover:!bg-white/[0.15] sm:w-auto" to="/profile">
+                <ShieldCheck size={17} /> View Profile
               </Link>
             )}
           </div>
@@ -45,7 +45,7 @@ const ClientDashboard = () => {
 
       {!verified && (
         <Alert type="warning">
-          Your account is currently <strong className="capitalize">{user?.status}</strong>. Container, payment, and Gate-Out actions will become available after admin verification. <Link className="font-black text-teal-700 underline" to="/client/account-status">View account status</Link>.
+          Your account is currently <strong className="capitalize">{user?.status}</strong>. Container, payment, and Gate-Out actions will become available after admin verification. <Link className="font-black text-teal-700 underline" to="/profile">View account status</Link>.
         </Alert>
       )}
 

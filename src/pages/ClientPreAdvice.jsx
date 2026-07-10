@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ClipboardList, FileText, RefreshCw, Send } from "lucide-react"
 import Alert from "../components/Alert"
+import ModernFileInput from "../components/ModernFileInput"
+import ModernDateInput from "../components/ModernDateInput"
 import { api, getApiError } from "../lib/api"
 
 const initialForm = {
@@ -49,22 +51,33 @@ const ClientPreAdvice = () => {
   const [alert, setAlert] = useState({ type: "", message: "" })
 
   const containerNumberPreview = useMemo(() => form.containerNumber.toUpperCase().replace(/[^A-Z0-9]/g, ""), [form.containerNumber])
+  const preAdviceRequestRef = useRef(null)
 
-  const loadPreAdvices = async () => {
-    try {
-      setLoading(true)
-      const { data } = await api.get("/client/pre-advices")
-      setPreAdvices(data.preAdvices || [])
-    } catch (error) {
-      setAlert({ type: "error", message: getApiError(error) })
-    } finally {
-      setLoading(false)
-    }
-  }
+  const loadPreAdvices = useCallback(async ({ force = false } = {}) => {
+    if (!force && preAdviceRequestRef.current) return preAdviceRequestRef.current
+
+    const request = (async () => {
+      try {
+        setLoading(true)
+        const { data } = await api.get("/client/pre-advices")
+        setPreAdvices(data.preAdvices || [])
+      } catch (error) {
+        setAlert({ type: "error", message: getApiError(error) })
+      } finally {
+        if (preAdviceRequestRef.current === request) {
+          preAdviceRequestRef.current = null
+        }
+        setLoading(false)
+      }
+    })()
+
+    preAdviceRequestRef.current = request
+    return request
+  }, [])
 
   useEffect(() => {
     loadPreAdvices()
-  }, [])
+  }, [loadPreAdvices])
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -100,7 +113,7 @@ const ClientPreAdvice = () => {
       setForm(initialForm)
       setFiles({})
       event.target.reset()
-      await loadPreAdvices()
+      await loadPreAdvices({ force: true })
     } catch (error) {
       setAlert({ type: "error", message: getApiError(error) })
     } finally {
@@ -128,7 +141,7 @@ const ClientPreAdvice = () => {
           <h2 className="text-lg font-black text-slate-950">Container Details</h2>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <Field label="Container Number">
-              <input className="input uppercase" name="containerNumber" value={form.containerNumber} onChange={handleChange} placeholder="ABCD1234567" required />
+              <input className="input uppercase" name="containerNumber" value={form.containerNumber} onChange={handleChange} placeholder="ABCD1234567" pattern="[A-Za-z]{4}[0-9]{7}" title="Container number must use 4 letters followed by 7 numbers, example: ABCD1234567." required />
               <div className="mt-1 text-xs font-bold text-slate-400">Format preview: {containerNumberPreview || "ABCD1234567"}</div>
             </Field>
 
@@ -162,7 +175,7 @@ const ClientPreAdvice = () => {
             </Field>
 
             <Field label="Arrival Date">
-              <input className="input" name="arrivalDate" type="date" value={form.arrivalDate} onChange={handleChange} required />
+              <ModernDateInput name="arrivalDate" type="date" value={form.arrivalDate} onChange={handleChange} required />
             </Field>
 
             <Field label="BL Number">
@@ -174,7 +187,7 @@ const ClientPreAdvice = () => {
             </Field>
 
             <Field label="Weight">
-              <input className="input" name="weight" type="number" min="0" value={form.weight} onChange={handleChange} placeholder="Optional" />
+              <input className="input" name="weight" type="number" min="0" step="0.01" value={form.weight} onChange={handleChange} placeholder="Optional" />
             </Field>
 
             <div className="md:col-span-2">
@@ -190,12 +203,23 @@ const ClientPreAdvice = () => {
             </div>
           </div>
 
-          <h2 className="mt-8 text-lg font-black text-slate-950">Documents</h2>
+          <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-black text-slate-950">Documents</h2>
+              <p className="mt-1 text-xs font-bold text-slate-500">Upload clear copies of the required documents for admin review.</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">PDF, DOC, JPG, PNG, WEBP</span>
+          </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             {documentFields.map((doc) => (
-              <Field key={doc.name} label={`${doc.label}${doc.required ? " *" : ""}`}>
-                <input className="input" name={doc.name} type="file" onChange={handleFileChange} required={doc.required} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" />
-              </Field>
+              <ModernFileInput
+                key={doc.name}
+                name={doc.name}
+                label={doc.label}
+                required={doc.required}
+                file={files[doc.name]}
+                onChange={handleFileChange}
+              />
             ))}
           </div>
 
@@ -211,7 +235,7 @@ const ClientPreAdvice = () => {
               <h2 className="text-lg font-black text-slate-950">My Pre-Advices</h2>
               <p className="text-sm font-medium text-slate-500">Confirmed records can proceed to Gate-In.</p>
             </div>
-            <button type="button" onClick={loadPreAdvices} className="btn-secondary !px-3">
+            <button type="button" onClick={() => loadPreAdvices({ force: true })} className="btn-secondary !px-3">
               <RefreshCw size={16} />
             </button>
           </div>

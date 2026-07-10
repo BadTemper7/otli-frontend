@@ -52,9 +52,10 @@ const AdminFlowOverview = () => {
             <h2 className="text-lg font-black text-slate-950">{group.group}</h2>
             <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
               {group.items.map((item) => {
-                const Icon = item.status === "Active" ? CheckCircle2 : CircleDotDashed
-                return (
-                  <Link key={item.key} to={item.path} className="group rounded-3xl border border-slate-200 bg-slate-50 p-5 transition hover:border-teal-200 hover:bg-teal-50">
+                const isActive = item.status === "Active"
+                const Icon = isActive ? CheckCircle2 : CircleDotDashed
+                const content = (
+                  <>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-teal-700 shadow-sm">
@@ -65,9 +66,23 @@ const AdminFlowOverview = () => {
                           <StatusPill status={item.status} />
                         </div>
                       </div>
-                      <ArrowRight className="text-slate-400 transition group-hover:translate-x-1 group-hover:text-teal-700" size={18} />
+                      {isActive && <ArrowRight className="text-slate-400 transition group-hover:translate-x-1 group-hover:text-teal-700" size={18} />}
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>
+                  </>
+                )
+
+                if (!isActive) {
+                  return (
+                    <div key={item.key} className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5 opacity-80">
+                      {content}
+                    </div>
+                  )
+                }
+
+                return (
+                  <Link key={item.key} to={item.path} className="group rounded-3xl border border-slate-200 bg-slate-50 p-5 transition hover:border-teal-200 hover:bg-teal-50">
+                    {content}
                   </Link>
                 )
               })}

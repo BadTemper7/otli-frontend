@@ -4,6 +4,7 @@ import { ArrowLeft, Building2, CheckCircle2, FileText, FileUp, LockKeyhole, Mail
 import AuthShell from "../components/AuthShell"
 import Alert from "../components/Alert"
 import OtpInput from "../components/OtpInput"
+import ModernFileInput from "../components/ModernFileInput"
 import { api, getApiError } from "../lib/api"
 import { useAuth } from "../context/AuthContext"
 
@@ -133,7 +134,7 @@ const ClientRegisterPage = () => {
       if (data.token && data.user) {
         saveSession({ token: data.token, user: data.user })
         const isVerifiedClient = ["active", "verified"].includes(data.user.status)
-        navigate(isVerifiedClient ? "/client/dashboard" : "/client/account-status", { replace: true })
+        navigate(isVerifiedClient ? "/dashboard" : "/profile", { replace: true })
       }
     } catch (err) {
       setError(getApiError(err))
@@ -200,15 +201,15 @@ const ClientRegisterPage = () => {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className="mb-1.5 block text-sm font-black text-slate-700">Company name</label>
-                  <input className="input" value={form.companyName} onChange={(event) => updateField("companyName", event.target.value)} required />
+                  <input className="input" name="companyName" value={form.companyName} onChange={(event) => updateField("companyName", event.target.value)} required />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="mb-1.5 block text-sm font-black text-slate-700">Company address</label>
-                  <input className="input" value={form.companyAddress} onChange={(event) => updateField("companyAddress", event.target.value)} required />
+                  <input className="input" name="companyAddress" value={form.companyAddress} onChange={(event) => updateField("companyAddress", event.target.value)} required />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-black text-slate-700">Company type</label>
-                  <select className="input" value={form.companyType} onChange={(event) => updateField("companyType", event.target.value)}>
+                  <select className="input" name="companyType" value={form.companyType} onChange={(event) => updateField("companyType", event.target.value)}>
                     <option value="trucking">Trucking</option>
                     <option value="shipping">Shipping</option>
                     <option value="brokerage">Brokerage</option>
@@ -218,12 +219,12 @@ const ClientRegisterPage = () => {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-black text-slate-700">Phone number</label>
-                  <input className="input" value={form.phoneNumber} onChange={(event) => updateField("phoneNumber", event.target.value)} placeholder="09XXXXXXXXX" required />
+                  <input className="input" type="tel" name="phoneNumber" value={form.phoneNumber} onChange={(event) => updateField("phoneNumber", event.target.value)} placeholder="09XXXXXXXXX" pattern="09[0-9]{9}" title="Phone number must use this format: 09XXXXXXXXX." required />
                 </div>
                 {form.companyType === "other" && (
                   <div className="sm:col-span-2">
                     <label className="mb-1.5 block text-sm font-black text-slate-700">Other company type</label>
-                    <input className="input" value={form.companyTypeOther} onChange={(event) => updateField("companyTypeOther", event.target.value)} required />
+                    <input className="input" name="companyTypeOther" value={form.companyTypeOther} onChange={(event) => updateField("companyTypeOther", event.target.value)} required />
                   </div>
                 )}
               </div>
@@ -235,10 +236,10 @@ const ClientRegisterPage = () => {
                 Representative
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <input className="input" placeholder="First name" value={form.representativeFirstName} onChange={(event) => updateField("representativeFirstName", event.target.value)} required />
-                <input className="input" placeholder="Middle name" value={form.representativeMiddleName} onChange={(event) => updateField("representativeMiddleName", event.target.value)} />
-                <input className="input" placeholder="Last name" value={form.representativeLastName} onChange={(event) => updateField("representativeLastName", event.target.value)} required />
-                <input className="input" placeholder="Position" value={form.representativePosition} onChange={(event) => updateField("representativePosition", event.target.value)} required />
+                <input className="input" name="representativeFirstName" placeholder="First name" value={form.representativeFirstName} onChange={(event) => updateField("representativeFirstName", event.target.value)} required />
+                <input className="input" name="representativeMiddleName" placeholder="Middle name" value={form.representativeMiddleName} onChange={(event) => updateField("representativeMiddleName", event.target.value)} />
+                <input className="input" name="representativeLastName" placeholder="Last name" value={form.representativeLastName} onChange={(event) => updateField("representativeLastName", event.target.value)} required />
+                <input className="input" name="representativePosition" placeholder="Position" value={form.representativePosition} onChange={(event) => updateField("representativePosition", event.target.value)} required />
               </div>
             </section>
 
@@ -248,9 +249,9 @@ const ClientRegisterPage = () => {
                 Login Details
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <input className="input sm:col-span-2" type="email" placeholder="Email address" value={form.email} onChange={(event) => updateField("email", event.target.value)} required />
-                <input className="input" type="password" placeholder="Password" value={form.password} onChange={(event) => updateField("password", event.target.value)} required />
-                <input className="input" type="password" placeholder="Confirm password" value={form.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} required />
+                <input className="input sm:col-span-2" type="email" name="email" placeholder="Email address" value={form.email} onChange={(event) => updateField("email", event.target.value)} required />
+                <input className="input" type="password" name="password" minLength={6} placeholder="Password" value={form.password} onChange={(event) => updateField("password", event.target.value)} required />
+                <input className="input" type="password" name="confirmPassword" minLength={6} placeholder="Confirm password" value={form.confirmPassword} onChange={(event) => updateField("confirmPassword", event.target.value)} required />
               </div>
               <p className="mt-3 text-xs font-semibold text-slate-500">Password must be at least 6 characters.</p>
             </section>
@@ -261,33 +262,16 @@ const ClientRegisterPage = () => {
                 Documents
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                {documentFields.map((item) => {
-                  const selectedFile = files[item.name]
-                  return (
-                    <label key={item.name} className="group block cursor-pointer rounded-2xl border border-dashed border-slate-300 bg-white p-4 transition hover:border-teal-300 hover:bg-teal-50/50">
-                      <div className="flex items-start gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500 group-hover:bg-teal-100 group-hover:text-teal-700">
-                          <FileText size={18} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-black text-slate-700">
-                            {item.label} {item.required && <span className="text-red-600">*</span>}
-                          </div>
-                          <div className="mt-1 truncate text-xs font-semibold text-slate-500">
-                            {selectedFile ? selectedFile.name : "PDF, DOC, JPG, PNG, or WEBP"}
-                          </div>
-                        </div>
-                      </div>
-                      <input
-                        className="sr-only"
-                        type="file"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-                        required={item.required}
-                        onChange={(event) => setFiles((prev) => ({ ...prev, [item.name]: event.target.files?.[0] }))}
-                      />
-                    </label>
-                  )
-                })}
+                {documentFields.map((item) => (
+                  <ModernFileInput
+                    key={item.name}
+                    name={item.name}
+                    label={item.label}
+                    required={item.required}
+                    file={files[item.name]}
+                    onChange={(event) => setFiles((prev) => ({ ...prev, [item.name]: event.target.files?.[0] || null }))}
+                  />
+                ))}
               </div>
             </section>
 
@@ -318,7 +302,7 @@ const ClientRegisterPage = () => {
           </form>
         )}
 
-        <Link className="block text-center text-sm font-black text-teal-700 hover:text-teal-900" to="/client/login">
+        <Link className="block text-center text-sm font-black text-teal-700 hover:text-teal-900" to="/login">
           Already registered? Login
         </Link>
       </div>

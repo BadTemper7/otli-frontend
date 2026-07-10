@@ -26,7 +26,7 @@ const numberValue = (value, fallback = 0) => {
 
 const getTeuFactor = (containerSize) => {
   if (Number(containerSize) === 40) return 2
-  if (Number(containerSize) === 45) return 2.25
+  if (Number(containerSize) === 45) return 3
   return 1
 }
 

@@ -82,11 +82,11 @@ const ClientAccountStatus = () => {
         <div className="border-b border-slate-100 bg-gradient-to-br from-teal-50 to-white p-6">
           <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-wide text-teal-700 ring-1 ring-teal-100">
             <FileText size={14} />
-            Client Account Status
+            Client Profile
           </div>
-          <h1 className="mt-3 text-3xl font-black text-slate-950">{currentUser?.companyName || "Client Application"}</h1>
+          <h1 className="mt-3 text-3xl font-black text-slate-950">{currentUser?.companyName || "Client Profile"}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            You can login even while your account is waiting for verification. Operational modules will open after admin verifies your client account.
+            Your profile includes your company details, representative information, document verification status, and module access.
           </p>
         </div>
 
@@ -149,7 +149,7 @@ const ClientAccountStatus = () => {
             </div>
 
             {canAccessBookings && (
-              <a href="/client/bookings" className="btn-primary inline-flex">
+              <a href="/bookings" className="btn-primary inline-flex">
                 Go to Bookings
               </a>
             )}

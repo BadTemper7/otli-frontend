@@ -15,7 +15,7 @@ const ClientVerifiedRoute = () => {
   }
 
   if (!user) {
-    return <Navigate to="/client/login" replace />
+    return <Navigate to="/login" replace />
   }
 
   if (user.userType !== "client") {
@@ -23,7 +23,7 @@ const ClientVerifiedRoute = () => {
   }
 
   if (!verifiedStatuses.includes(user.status)) {
-    return <Navigate to="/client/account-status" replace />
+    return <Navigate to="/profile" replace />
   }
 
   return <Outlet />

@@ -57,7 +57,7 @@ export const adminFlowModules = [
       {
         key: "gateIn",
         title: "Gate-In Management",
-        path: "/admin/bookings",
+        path: "/admin/gate-in",
         description: "Search approved bookings, verify container details, inspect condition, encode truck and driver details, and approve Gate-In.",
         status: "Active",
       },
@@ -85,7 +85,7 @@ export const adminFlowModules = [
         title: "Storage Monitoring",
         path: "/admin/storage-monitoring",
         description: "Track free days, chargeable days, overstaying containers, aging, occupancy, and storage status.",
-        status: "CMS placeholder",
+        status: "Active",
       },
     ],
   },
@@ -97,26 +97,19 @@ export const adminFlowModules = [
         title: "Rate Setup",
         path: "/admin/rate-setup",
         description: "Manage billing rates by description, unit, container size, container type, rate, effective date, and status.",
-        status: "CMS placeholder",
-      },
-      {
-        key: "billing",
-        title: "Billing Management",
-        path: "/admin/billing",
-        description: "Compute charges, add manual charges, generate billing summaries, generate invoices, and monitor paid or unpaid records.",
-        status: "CMS placeholder",
+        status: "Active",
       },
       {
         key: "paymentVerification",
         title: "Payment Verification",
-        path: "/admin/bookings",
+        path: "/admin/payment-verification",
         description: "Review proof of payment, match payment reference numbers and amounts, approve or reject payments, and unlock client Gate-Out requests.",
         status: "Active",
       },
       {
         key: "gateOut",
         title: "Gate-Out Management",
-        path: "/admin/bookings",
+        path: "/admin/gate-out",
         description: "Validate release requests, confirm payment clearance, perform final inspection, and mark the booking as Completed / Gate-Out Done.",
         status: "Active",
       },
@@ -154,7 +147,7 @@ export const flattenedAdminFlowModules = adminFlowModules.flatMap((group) => gro
 
 export const statusGroups = [
   {
-    title: "Client Account Status",
+    title: "Client Profile",
     items: ["Pending Verification", "Rejected", "Resubmitted", "Verified", "Suspended"],
   },
   {

@@ -29,14 +29,24 @@ const modules = [
 ]
 const actions = ["view", "create", "edit", "delete"]
 
-const defaultPermissions = modules.reduce((acc, moduleName) => {
+const viewOnlyPermissions = modules.reduce((acc, moduleName) => {
   acc[moduleName] = { view: true, create: false, edit: false, delete: false }
   return acc
 }, {})
 
+const fullPermissions = modules.reduce((acc, moduleName) => {
+  acc[moduleName] = { view: true, create: true, edit: true, delete: true }
+  return acc
+}, {})
+
+const getPermissionsForRole = (role) => {
+  if (["super_admin", "admin"].includes(role)) return fullPermissions
+  return viewOnlyPermissions
+}
+
 const AdminAccounts = () => {
   const [users, setUsers] = useState([])
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "admin", permissions: defaultPermissions })
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "admin", permissions: fullPermissions })
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -76,7 +86,7 @@ const AdminAccounts = () => {
     try {
       const { data } = await api.post("/admin/users", form)
       setMessage(data.message)
-      setForm({ name: "", email: "", password: "", role: "admin", permissions: defaultPermissions })
+      setForm({ name: "", email: "", password: "", role: "admin", permissions: fullPermissions })
       await loadAdmins()
     } catch (err) {
       setError(getApiError(err))
@@ -123,13 +133,26 @@ const AdminAccounts = () => {
         <input className="input" placeholder="Full name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required />
         <input className="input" type="email" placeholder="Email" value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} required />
         <input className="input" type="password" placeholder="Password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} required />
-        <select className="input" value={form.role} onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}>
+        <select
+          className="input"
+          value={form.role}
+          onChange={(event) => {
+            const nextRole = event.target.value
+            setForm((prev) => ({ ...prev, role: nextRole, permissions: getPermissionsForRole(nextRole) }))
+          }}
+        >
           <option value="admin">Admin</option>
           <option value="staff">Staff</option>
           <option value="super_admin">Super Admin</option>
         </select>
 
-        {form.role !== "super_admin" && (
+        {form.role === "admin" && (
+          <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+            Admin accounts have full operational access to all active admin modules. Use Staff if you need limited module permissions.
+          </div>
+        )}
+
+        {form.role === "staff" && (
           <div className="max-h-80 overflow-auto rounded-2xl border border-slate-200">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">

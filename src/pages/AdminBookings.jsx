@@ -52,6 +52,9 @@ const formatDate = (value) => {
   return new Date(value).toLocaleString()
 }
 
+const getBookingInDate = (booking = {}) => booking.inDate || booking.expectedArrivalDate
+const getBookingOutDate = (booking = {}) => booking.outDate
+
 const AdminBookings = () => {
   const [bookings, setBookings] = useState([])
   const [areas, setAreas] = useState([])
@@ -180,7 +183,7 @@ const AdminBookings = () => {
 
   const markStored = () => handleAction(
     () => api.patch(`/admin/bookings/${selectedBooking.id}/store`, { remarks: actionRemarks }),
-    "Container marked as stored in assigned area."
+    "Container marked as stored. Final billing will compute after the client submits Date Out."
   )
 
   const approvePayment = () => handleAction(
@@ -305,8 +308,10 @@ const AdminBookings = () => {
                 <div><span className="font-black text-slate-500">Size:</span> {selectedBooking.containerSize}ft</div>
                 <div><span className="font-black text-slate-500">Type:</span> {selectedBooking.containerType?.replace("_", " ")}</div>
                 <div><span className="font-black text-slate-500">Load:</span> {selectedBooking.containerLoadStatus}</div>
+                <div><span className="font-black text-slate-500">Service:</span> {selectedBooking.serviceType === "stripping_stuffing_mano" ? "Stripping / Stuffing with Mano" : "Container Yard Operation"}</div>
                 <div><span className="font-black text-slate-500">Shipping Line:</span> {selectedBooking.shippingLine}</div>
-                <div><span className="font-black text-slate-500">Expected Arrival:</span> {formatDate(selectedBooking.expectedArrivalDate)}</div>
+                <div><span className="font-black text-slate-500">In Date:</span> {formatDate(getBookingInDate(selectedBooking))}</div>
+                <div><span className="font-black text-slate-500">Requested Date Out:</span> {formatDate(getBookingOutDate(selectedBooking))}</div>
                 <div><span className="font-black text-slate-500">Assigned Slot:</span> {selectedBooking.assignedSlotNumber || "Pending"}</div>
               </div>
             </div>
@@ -398,9 +403,20 @@ const AdminBookings = () => {
                   <h3 className="text-lg font-black text-slate-950">Billing and Payment</h3>
                 </div>
                 <div className="mt-4 rounded-3xl bg-slate-50 p-4 text-sm">
-                  <div><span className="font-black text-slate-500">Amount:</span> PHP {Number(selectedBooking.paymentAmount || 0).toLocaleString()}</div>
+                  <div><span className="font-black text-slate-500">Auto Billing Amount:</span> PHP {Number(selectedBooking.billingTotal || selectedBooking.paymentAmount || 0).toLocaleString()}</div>
+                  <div><span className="font-black text-slate-500">Payment Submitted:</span> PHP {Number(selectedBooking.paymentAmount || 0).toLocaleString()}</div>
                   <div><span className="font-black text-slate-500">Reference:</span> {selectedBooking.paymentReferenceNumber || "-"}</div>
                   <div><span className="font-black text-slate-500">Submitted:</span> {formatDate(selectedBooking.paymentSubmittedAt)}</div>
+                  {(selectedBooking.billingLineItems || []).length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {(selectedBooking.billingLineItems || []).map((item, index) => (
+                        <div key={`${item.chargeCode}-${index}`} className="flex flex-col justify-between gap-1 rounded-2xl bg-white px-3 py-2 text-xs font-bold text-slate-700 sm:flex-row">
+                          <span>{item.description || item.chargeCode} • {item.quantity} x PHP {Number(item.rateAmount || 0).toLocaleString()}</span>
+                          <span>PHP {Number(item.amount || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(selectedBooking.paymentProofs || []).map((doc, index) => (
                       <a key={`${doc.url}-${index}`} className="rounded-full bg-white px-3 py-1 text-xs font-black text-teal-700 underline" href={doc.secureUrl || doc.url} target="_blank" rel="noreferrer">

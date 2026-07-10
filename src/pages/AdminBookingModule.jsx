@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Banknote,
+  Calculator,
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
@@ -60,15 +61,15 @@ const moduleConfig = {
     queueTitle: "Bookings Ready for Gate-In",
   },
   billing: {
-    badge: "Billing Module",
-    title: "Payment Review and Billing Verification",
+    badge: "Payment Verification Module",
+    title: "Payment Verification and Approval",
     description:
-      "This is where admin reviews payment proof submitted by the client. Billing status is separate from booking status.",
+      "Review the system-generated payment reference, amount, payment proof, and approve or reject the client payment submission.",
     icon: Banknote,
     defaultStatus: "all",
-    defaultBillingStatus: "payment_submitted",
+    defaultBillingStatus: "payment_under_review",
     primarySection: "billing",
-    queueTitle: "Payments for Review",
+    queueTitle: "Payments Under Review",
   },
   gateOut: {
     badge: "Gate-Out Module",
@@ -94,6 +95,9 @@ const formatDate = (value) => {
   if (!value) return "-"
   return new Date(value).toLocaleString()
 }
+
+const getBookingInDate = (booking = {}) => booking.inDate || booking.expectedArrivalDate
+const getBookingOutDate = (booking = {}) => booking.outDate
 
 const Field = ({ label, children, hint }) => (
   <label className="block">
@@ -128,12 +132,18 @@ const AdminBookingModule = ({ mode }) => {
   const [filters, setFilters] = useState({ status: config.defaultStatus, billingStatus: config.defaultBillingStatus, search: "" })
   const [approval, setApproval] = useState({ areaId: "", blockId: "", bay: 1, row: 1, tier: 1 })
   const [gateIn, setGateIn] = useState(initialGateIn)
+  const [operationForm, setOperationForm] = useState({ serviceType: "container_yard" })
   const [rejectReason, setRejectReason] = useState("")
   const [paymentRejectReason, setPaymentRejectReason] = useState("")
   const [remarks, setRemarks] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [alert, setAlert] = useState({ type: "", message: "" })
+  const bookingsRequestRef = useRef({ key: "", promise: null })
+  const areasRequestRef = useRef({ key: "", promise: null })
+  const blocksRequestRef = useRef({ key: "", promise: null })
+  const slotsRequestRef = useRef({ key: "", promise: null })
+  const realtimeRefreshTimerRef = useRef(null)
 
   const selectedBooking = useMemo(() => bookings.find((booking) => booking.id === selectedId) || bookings[0] || null, [bookings, selectedId])
   const selectedBlock = useMemo(() => blocks.find((block) => String(block.id) === String(approval.blockId)), [blocks, approval.blockId])
@@ -157,74 +167,130 @@ const AdminBookingModule = ({ mode }) => {
   const rowOptions = useMemo(() => Array.from({ length: selectedBlock?.rowCount || 1 }, (_, index) => index + 1), [selectedBlock])
   const tierOptions = useMemo(() => Array.from({ length: selectedBlock?.tierCount || 1 }, (_, index) => index + 1), [selectedBlock])
 
-  const loadBookings = async () => {
-    try {
-      setLoading(true)
-      const params = new URLSearchParams()
-      if (filters.status) params.set("status", filters.status)
-      if (filters.billingStatus) params.set("billingStatus", filters.billingStatus)
-      if (filters.search) params.set("search", filters.search)
-      const { data } = await api.get(`${bookingBasePath}?${params.toString()}`)
-      setBookings(data.bookings || [])
-      if (data.bookings?.length) {
-        setSelectedId((current) => current && data.bookings.some((booking) => booking.id === current) ? current : data.bookings[0].id)
-      } else {
-        setSelectedId("")
-      }
-    } catch (error) {
-      setAlert({ type: "error", message: getApiError(error) })
-    } finally {
-      setLoading(false)
-    }
-  }
+  const loadBookings = useCallback(async ({ force = false } = {}) => {
+    const params = new URLSearchParams()
+    if (filters.status) params.set("status", filters.status)
+    if (filters.billingStatus) params.set("billingStatus", filters.billingStatus)
+    if (filters.search) params.set("search", filters.search)
 
-  const loadAreas = async () => {
-    try {
-      if (isPreAdviceApprovalMode) {
-        const { data } = await api.get(`${yardBasePath}/blocks`)
+    const requestKey = `${bookingBasePath}?${params.toString()}`
+    if (!force && bookingsRequestRef.current.key === requestKey && bookingsRequestRef.current.promise) {
+      return bookingsRequestRef.current.promise
+    }
+
+    const request = (async () => {
+      try {
+        setLoading(true)
+        const { data } = await api.get(requestKey)
+        setBookings(data.bookings || [])
+        if (data.bookings?.length) {
+          setSelectedId((current) => current && data.bookings.some((booking) => booking.id === current) ? current : data.bookings[0].id)
+        } else {
+          setSelectedId("")
+        }
+      } catch (error) {
+        setAlert({ type: "error", message: getApiError(error) })
+      } finally {
+        if (bookingsRequestRef.current.promise === request) {
+          bookingsRequestRef.current = { key: "", promise: null }
+        }
+        setLoading(false)
+      }
+    })()
+
+    bookingsRequestRef.current = { key: requestKey, promise: request }
+    return request
+  }, [bookingBasePath, filters.billingStatus, filters.search, filters.status])
+
+  const loadAreas = useCallback(async ({ force = false } = {}) => {
+    const requestKey = isPreAdviceApprovalMode ? `${yardBasePath}/blocks` : `${yardBasePath}/areas`
+    if (!force && areasRequestRef.current.key === requestKey && areasRequestRef.current.promise) {
+      return areasRequestRef.current.promise
+    }
+
+    const request = (async () => {
+      try {
+        if (isPreAdviceApprovalMode) {
+          const { data } = await api.get(requestKey)
+          setAreas(data.areas || [])
+          setBlocks(data.blocks || [])
+          return
+        }
+
+        const { data } = await api.get(requestKey)
         setAreas(data.areas || [])
-        setBlocks(data.blocks || [])
-        return
+      } catch (error) {
+        setAreas([])
+        setBlocks([])
+        setAlert({ type: "error", message: getApiError(error) })
+      } finally {
+        if (areasRequestRef.current.promise === request) {
+          areasRequestRef.current = { key: "", promise: null }
+        }
       }
+    })()
 
-      const { data } = await api.get(`${yardBasePath}/areas`)
-      setAreas(data.areas || [])
-    } catch (error) {
-      setAreas([])
-      setBlocks([])
-      setAlert({ type: "error", message: getApiError(error) })
-    }
-  }
+    areasRequestRef.current = { key: requestKey, promise: request }
+    return request
+  }, [isPreAdviceApprovalMode, yardBasePath])
 
-  const loadBlocks = async (areaId) => {
+  const loadBlocks = useCallback(async (areaId, { force = false } = {}) => {
     if (!areaId) {
       setBlocks([])
-      return
+      return Promise.resolve()
     }
 
-    try {
-      const { data } = await api.get(`${yardBasePath}/areas/${areaId}/blocks`)
-      setBlocks(data.blocks || [])
-    } catch (error) {
-      setAlert({ type: "error", message: getApiError(error) })
+    const requestKey = `${yardBasePath}/areas/${areaId}/blocks`
+    if (!force && blocksRequestRef.current.key === requestKey && blocksRequestRef.current.promise) {
+      return blocksRequestRef.current.promise
     }
-  }
 
+    const request = (async () => {
+      try {
+        const { data } = await api.get(requestKey)
+        setBlocks(data.blocks || [])
+      } catch (error) {
+        setAlert({ type: "error", message: getApiError(error) })
+      } finally {
+        if (blocksRequestRef.current.promise === request) {
+          blocksRequestRef.current = { key: "", promise: null }
+        }
+      }
+    })()
 
-  const loadSlotAvailability = async (blockId) => {
+    blocksRequestRef.current = { key: requestKey, promise: request }
+    return request
+  }, [yardBasePath])
+
+  const loadSlotAvailability = useCallback(async (blockId, { force = false } = {}) => {
     if (!blockId) {
       setSlotAvailability([])
-      return
+      return Promise.resolve()
     }
 
-    try {
-      const { data } = await api.get(`${bookingBasePath}/yard/blocks/${blockId}/slots`)
-      setSlotAvailability(data.slots || [])
-    } catch (error) {
-      setSlotAvailability([])
-      setAlert({ type: "error", message: getApiError(error) })
+    const requestKey = `${bookingBasePath}/yard/blocks/${blockId}/slots`
+    if (!force && slotsRequestRef.current.key === requestKey && slotsRequestRef.current.promise) {
+      return slotsRequestRef.current.promise
     }
-  }
+
+    const request = (async () => {
+      try {
+        const { data } = await api.get(requestKey)
+        setSlotAvailability(data.slots || [])
+      } catch (error) {
+        setSlotAvailability([])
+        setAlert({ type: "error", message: getApiError(error) })
+      } finally {
+        if (slotsRequestRef.current.promise === request) {
+          slotsRequestRef.current = { key: "", promise: null }
+        }
+      }
+    })()
+
+    slotsRequestRef.current = { key: requestKey, promise: request }
+    return request
+  }, [bookingBasePath])
+
 
   useEffect(() => {
     setFilters({ status: config.defaultStatus, billingStatus: config.defaultBillingStatus, search: "" })
@@ -238,7 +304,7 @@ const AdminBookingModule = ({ mode }) => {
 
   useEffect(() => {
     if (config.primarySection === "approval") loadAreas()
-  }, [config.primarySection])
+  }, [config.primarySection, loadAreas])
 
   useEffect(() => {
     if (!selectedBooking) return
@@ -260,27 +326,47 @@ const AdminBookingModule = ({ mode }) => {
       driverLicenseNumber: selectedBooking.driverLicenseNumber || "",
       inspectionRemarks: selectedBooking.inspectionRemarks || "",
     })
+
+    setOperationForm({ serviceType: selectedBooking.serviceType || "container_yard" })
   }, [selectedBooking?.id])
 
   useEffect(() => {
     if (config.primarySection === "approval" && !isPreAdviceApprovalMode) loadBlocks(approval.areaId)
-  }, [approval.areaId, config.primarySection, isPreAdviceApprovalMode])
+  }, [approval.areaId, config.primarySection, isPreAdviceApprovalMode, loadBlocks])
 
   useEffect(() => {
     if (config.primarySection === "approval") loadSlotAvailability(approval.blockId)
-  }, [approval.blockId, config.primarySection])
+  }, [approval.blockId, config.primarySection, loadSlotAvailability])
+
+  const shouldRefreshForRealtimeEvent = useCallback((eventType) => {
+    if (!eventType) return false
+    if (isPreAdviceApprovalMode) return eventType.startsWith("preAdvice:") || eventType.startsWith("yard:")
+    if (config.primarySection === "gateIn") return eventType.startsWith("gateIn:") || eventType === "booking:gate_in_approved" || eventType === "booking:approved" || eventType === "booking:rejected"
+    if (config.primarySection === "billing") return eventType.includes("payment_") || eventType === "booking:billing_operation_updated" || eventType === "booking:gate_out_requested"
+    if (config.primarySection === "gateOut") return eventType.includes("gate_out") || eventType === "booking:completed" || eventType === "booking:payment_approved"
+    return eventType.startsWith("booking:") || eventType.startsWith("yard:") || eventType.startsWith("inventory:")
+  }, [config.primarySection, isPreAdviceApprovalMode])
 
   useEffect(() => {
     const handleRealtime = (event) => {
       const eventType = event.detail?.type || ""
-      if (!eventType.startsWith("booking:") && !eventType.startsWith("yard:") && !eventType.startsWith("inventory:")) return
-      loadBookings()
-      if (approval.blockId) loadSlotAvailability(approval.blockId)
+      if (!shouldRefreshForRealtimeEvent(eventType)) return
+
+      window.clearTimeout(realtimeRefreshTimerRef.current)
+      realtimeRefreshTimerRef.current = window.setTimeout(() => {
+        loadBookings({ force: true })
+        if (config.primarySection === "approval" && approval.blockId) {
+          loadSlotAvailability(approval.blockId, { force: true })
+        }
+      }, 350)
     }
 
     window.addEventListener("otli:realtime", handleRealtime)
-    return () => window.removeEventListener("otli:realtime", handleRealtime)
-  }, [approval.blockId, config.primarySection, filters.status, filters.billingStatus, filters.search])
+    return () => {
+      window.removeEventListener("otli:realtime", handleRealtime)
+      window.clearTimeout(realtimeRefreshTimerRef.current)
+    }
+  }, [approval.blockId, config.primarySection, loadBookings, loadSlotAvailability, shouldRefreshForRealtimeEvent])
 
   const runAction = async (callback, message) => {
     if (!selectedBooking) return
@@ -289,7 +375,7 @@ const AdminBookingModule = ({ mode }) => {
       setSaving(true)
       await callback()
       setAlert({ type: "success", message })
-      await loadBookings()
+      await loadBookings({ force: true })
     } catch (error) {
       setAlert({ type: "error", message: getApiError(error) })
     } finally {
@@ -326,12 +412,19 @@ const AdminBookingModule = ({ mode }) => {
 
   const markStored = () => runAction(
     () => api.patch(`/admin/bookings/${selectedBooking.id}/store`, { remarks }),
-    "Container marked as stored in assigned area."
+    "Container marked as stored. Final billing will compute after the client submits Date Out."
+  )
+
+  const saveBillingOperation = () => runAction(
+    () => api.patch(`/admin/bookings/${selectedBooking.id}/billing-operation`, operationForm),
+    ["stored_in_assigned_area", "gate_out_requested", "gate_out_approved"].includes(selectedBooking.status)
+      ? "Billing operation saved and bill recomputed."
+      : "Billing operation saved. It will compute after Mark Stored."
   )
 
   const approvePayment = () => runAction(
     () => api.patch(`/admin/bookings/${selectedBooking.id}/payment/approve`, { remarks }),
-    "Payment approved. Gate-Out request is now available to the client."
+    "Payment approved. You can still view it by choosing Approved Payments / Paid Approved in this module."
   )
 
   const rejectPayment = () => runAction(
@@ -349,7 +442,7 @@ const AdminBookingModule = ({ mode }) => {
     "Container released and booking completed."
   )
 
-  const handleSearch = () => loadBookings()
+  const handleSearch = () => loadBookings({ force: true })
 
   return (
     <div className="space-y-6">
@@ -379,6 +472,28 @@ const AdminBookingModule = ({ mode }) => {
           </select>
           <button type="button" onClick={handleSearch} className="btn-secondary" disabled={loading}><RefreshCw size={16} /> Refresh</button>
         </div>
+        {config.primarySection === "billing" && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {[
+              ["payment_under_review", "Under Review"],
+              ["paid_approved", "Approved Payments"],
+              ["payment_rejected", "Rejected"],
+              ["all", "All Payments"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFilters((current) => ({ ...current, billingStatus: value }))}
+                className={`rounded-full px-4 py-2 text-xs font-black transition ${filters.billingStatus === value ? "bg-teal-600 text-white shadow-lg shadow-teal-950/20" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+              >
+                {label}
+              </button>
+            ))}
+            <div className="basis-full rounded-2xl bg-blue-50 px-4 py-3 text-xs font-bold text-blue-700">
+              After approval, the payment stays here under Approved Payments and is also visible inside Booking Module details, Inventory, Gate-Out, and the client booking details.
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
@@ -438,9 +553,28 @@ const AdminBookingModule = ({ mode }) => {
                 <div><span className="font-black text-slate-500">Size:</span> {selectedBooking.containerSize}ft</div>
                 <div><span className="font-black text-slate-500">Type:</span> {selectedBooking.containerType?.replace("_", " ")}</div>
                 <div><span className="font-black text-slate-500">Load:</span> {selectedBooking.containerLoadStatus}</div>
+                <div><span className="font-black text-slate-500">Service:</span> {selectedBooking.serviceType === "stripping_stuffing_mano" ? "Stripping / Stuffing with Mano" : "Container Yard Operation"}</div>
                 <div><span className="font-black text-slate-500">Shipping Line:</span> {selectedBooking.shippingLine}</div>
-                <div><span className="font-black text-slate-500">Expected Arrival:</span> {formatDate(selectedBooking.expectedArrivalDate)}</div>
+                <div><span className="font-black text-slate-500">In Date:</span> {formatDate(getBookingInDate(selectedBooking))}</div>
+                <div><span className="font-black text-slate-500">Requested Date Out:</span> {formatDate(getBookingOutDate(selectedBooking))}</div>
                 <div><span className="font-black text-slate-500">Assigned Slot:</span> {selectedBooking.assignedSlotNumber || "Pending"}</div>
+              </div>
+
+              <div className="mt-4 rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <Field label="Operation Made / Billing Service" hint="Lift On, Lift Off, and storage are automatic. Use this only for optional service billing before payment.">
+                    <select className="input bg-white" value={operationForm.serviceType} onChange={(event) => setOperationForm({ serviceType: event.target.value })} disabled={!['unpaid', 'payment_rejected'].includes(selectedBooking.billingStatus)}>
+                      <option value="container_yard">Container Yard Operation</option>
+                      <option value="stripping_stuffing_mano">Stripping / Stuffing with Mano</option>
+                    </select>
+                  </Field>
+                  <button type="button" onClick={saveBillingOperation} className="btn-primary shrink-0" disabled={saving || !['unpaid', 'payment_rejected'].includes(selectedBooking.billingStatus)}>
+                    <Calculator size={16} /> Save Operation
+                  </button>
+                </div>
+                <p className="mt-3 text-xs font-bold leading-5 text-emerald-800">
+                  Client bill is computed before payment after the client submits Date Out in the gate-out request. After payment is submitted or approved, this operation cannot be changed.
+                </p>
               </div>
             </div>
 
@@ -581,7 +715,7 @@ const AdminBookingModule = ({ mode }) => {
                     <Truck size={16} /> Approve Gate-In
                   </button>
                   <button type="button" onClick={markStored} className="btn-secondary" disabled={saving || selectedBooking.status !== "gate_in_approved"}>
-                    <Warehouse size={16} /> Mark Stored In Assigned Area
+                    <Warehouse size={16} /> Mark Stored
                   </button>
                 </div>
               </div>
@@ -591,12 +725,24 @@ const AdminBookingModule = ({ mode }) => {
               <div className="card p-5">
                 <div className="flex items-center gap-2">
                   <CreditCard size={18} className="text-teal-700" />
-                  <h3 className="text-lg font-black text-slate-950">Client Payment Submission</h3>
+                  <h3 className="text-lg font-black text-slate-950">Payment Verification</h3>
                 </div>
                 <div className="mt-4 rounded-3xl bg-slate-50 p-4 text-sm">
-                  <div><span className="font-black text-slate-500">Amount:</span> PHP {Number(selectedBooking.paymentAmount || 0).toLocaleString()}</div>
-                  <div><span className="font-black text-slate-500">Reference:</span> {selectedBooking.paymentReferenceNumber || "-"}</div>
+                  <div><span className="font-black text-slate-500">Auto Billing Amount:</span> PHP {Number(selectedBooking.billingTotal || selectedBooking.paymentAmount || 0).toLocaleString()}</div>
+                  <div><span className="font-black text-slate-500">Payment Submitted:</span> PHP {Number(selectedBooking.paymentAmount || 0).toLocaleString()}</div>
+                  <div><span className="font-black text-slate-500">System Ref.:</span> {selectedBooking.paymentReferenceNumber || "Auto-generated on submit"}</div>
+                  <div><span className="font-black text-slate-500">Computed:</span> {formatDate(selectedBooking.billingComputedAt)} • {selectedBooking.billingDays || 0} billing day(s)</div>
                   <div><span className="font-black text-slate-500">Submitted:</span> {formatDate(selectedBooking.paymentSubmittedAt)}</div>
+                  {(selectedBooking.billingLineItems || []).length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {(selectedBooking.billingLineItems || []).map((item, index) => (
+                        <div key={`${item.chargeCode}-${index}`} className="flex flex-col justify-between gap-1 rounded-2xl bg-white px-3 py-2 text-xs font-bold text-slate-700 sm:flex-row">
+                          <span>{item.description || item.chargeCode} • {item.quantity} x PHP {Number(item.rateAmount || 0).toLocaleString()}</span>
+                          <span>PHP {Number(item.amount || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(selectedBooking.paymentProofs || []).map((doc, index) => (
                       <a key={`${doc.url}-${index}`} className="rounded-full bg-white px-3 py-1 text-xs font-black text-teal-700 underline" href={doc.secureUrl || doc.url} target="_blank" rel="noreferrer">

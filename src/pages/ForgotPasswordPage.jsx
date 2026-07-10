@@ -20,7 +20,7 @@ const ForgotPasswordPage = ({ type = "admin" }) => {
   const [passwordChanged, setPasswordChanged] = useState(false)
 
   const isAdmin = type === "admin"
-  const loginPath = isAdmin ? "/admin/login" : "/client/login"
+  const loginPath = isAdmin ? "/admin/login" : "/login"
 
   useEffect(() => {
     return () => {
@@ -98,7 +98,7 @@ const ForgotPasswordPage = ({ type = "admin" }) => {
           <form onSubmit={requestOtp} className="space-y-4">
             <div>
               <label className="mb-1 block text-sm font-bold text-slate-700">Email address</label>
-              <input className="input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+              <input className="input" type="email" name="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
             </div>
             <button className="btn-primary w-full" disabled={loading}>
               <Mail size={18} />
@@ -119,11 +119,11 @@ const ForgotPasswordPage = ({ type = "admin" }) => {
             </div>
             <div>
               <label className="mb-1 block text-sm font-bold text-slate-700">New password</label>
-              <input className="input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              <input className="input" type="password" name="password" minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required />
             </div>
             <div>
               <label className="mb-1 block text-sm font-bold text-slate-700">Confirm password</label>
-              <input className="input" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
+              <input className="input" type="password" name="confirmPassword" minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
             </div>
             <button className="btn-primary w-full" disabled={loading || otp.length !== 6}>
               <KeyRound size={18} />
